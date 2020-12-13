@@ -1,0 +1,389 @@
+/******************************************************
+*
+*    __   __   ___  __    ___                         
+*   |    |  | |    |  \  |    |\   |
+*   |__  |__| |___ |   \ |___ | \  |   
+*      | |    |    |   / |    |  \ | 
+*    __| |    |___ |__/  |___ |   \| 
+* 
+*   __    __    ___          _____    ___       ____
+*  |     |  |  |     |     |   |         |     |    |
+*  |__   |__|  |___  |     |   |      ___|     |    |
+*     |  |     |     |     |   |     |      _  |    |
+*   __|  |     |___  |___  |   |     |___  (_) |____|
+*
+* 
+*******************************************************
+* THE BEER-WARE LICENSE
+* This is our take on the classic Finnish game from Speden Spelit TV show.
+* As long as you retain this notice you can do whatever you want with this stuff.
+* If we meet some day, and you think this stuff is useful, you can buy us a beer in return.
+* 
+* Riku Korkiasaari, Samuli Ikäläinen and Tommi Kinnunen, OAMK, 2020.
+********************************************************
+*/
+
+//Libraries used in this project
+#include <LiquidCrystal.h>
+
+//Common global variables
+int btnState[5];           //Button states
+int score=0;                 //Score counter for speetest
+int score1=0;        //Score counter for memorygame
+int hiScore=0;               //Highscore counter for speedtest
+int hiScore1=0;        //Highscore counter for memorygame
+int screen=0;        //Makes the lcd switch views
+int lastGame=0;           //Shows the right last game score
+const int rs = 12, en = 11, d4 = 10, d5 = 9, d6 = 8, d7 = 7; //Defining lcd pins
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7); //Defining lcd pins
+
+enum STATE
+{ //enumeration
+    SAVER = 0b00,
+    MUISTIPELI = 0b01, //Setting bin values
+    NOPEUSPELI = 0b10
+};
+
+STATE state; // initialize state variable
+
+//Funktiot
+int nopeuspeli(); //Int functions to return highScore. Speedtest.
+int muistipeli(); //Memorygame program
+void saver();     //"Screen saver" while no game is being played
+void rBtnSt();    //Read buttons
+void zBtnSt();    //"Zero" buttons
+int checkButtons(); //Check buttons
+int writeScore();   // Write highscore to eeprom
+
+
+
+void setup()
+{
+  // set up the LCD's number of columns and rows:
+  lcd.begin(16, 2); 
+  
+    pinMode(2, OUTPUT);
+    pinMode(3, OUTPUT);
+    pinMode(4, OUTPUT); // Set pins 2-4 as output.
+    pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+
+    state = SAVER; // initial state
+
+    Serial.begin(9600); //Baudrate
+}
+
+
+
+void loop()
+{
+
+  delay(500); //delay, so player has time to choose a game
+    bool btnStates[2]; // holds the states of each button
+    btnState[0] = analogRead(0) >= 900; //Reading button state
+    btnState[1] = analogRead(1) >= 900; //Reading button state
+    delay(1000);
+
+    // get state based on buttons
+    state = (STATE)(
+        (btnState[0] << 1) | btnState[1]);
+
+    switch (state) //Switch-case to start chosen program
+    {
+    case NOPEUSPELI:
+        Serial.println("Nopeuspeli!");
+        score = 0;
+        lastGame=0;
+        nopeuspeli();
+        break;
+    case MUISTIPELI:
+        Serial.println("Muistipeli!");
+        score1=0;
+        lastGame=0;
+        muistipeli();
+        break;
+    default:
+        Serial.println("Saver...");
+        saver();
+        break;
+    }
+}
+
+//Global variables of speedtest.
+long unsigned int timer = 0; //Timer
+int interval = 2000;         //Time for new button to light up
+int randomNumber=0;
+
+int nopeuspeli()
+{
+    int interval = 2000;
+    int gameOver = 0; //Pretty self explanatory
+ 
+
+    randomNumber = initialize();//To not give same num twice in a row 
+    
+    while (gameOver == 0) //Game is on, while gameOver =0
+    {
+      lcd.setCursor(0, 0); //Telling lcd where to write
+      lcd.print("Nykyinen yritys"); //Telling lcd what to write
+      lcd.setCursor(0, 1);
+      lcd.print(score);
+        rBtnSt(); //Read button states constantly
+        int buttonResult = checkButtons(); 
+        if (interval<=400){
+          interval=400;
+        }   //Making the game just a bit "easier" in the end
+        
+
+        if (buttonResult == randomNumber - 1)
+        {
+            interval = interval - 20; //Less time to press a button
+            timer = millis();
+            score++; //Adds 1 point to score! YAY!
+            randomNumber = initialize(); //To not give same num twice in a row
+            buttonResult = 0; //To read the button result again
+            delay(200);
+            
+        }
+        else if (buttonResult != randomNumber - 1 && buttonResult != 0 || (timer + interval == millis())) //If wrong button is pressed or time is up
+        {
+            gameOver = 1; //Game ends
+        }
+    }
+  //Comparing score to highscore, if better, writes it down
+if(score>hiScore){
+  hiScore=score; 
+    }
+lastGame=1; //Shows the score of current lost game
+return score;
+}
+
+
+int lastRandomNumber = 0;
+//Makes random number not to be same twice in a row
+int initialize(){
+    zBtnSt();
+    randomSeed(analogRead(5)); //Get different runs every time
+    lastRandomNumber=randomNumber;
+    while (randomNumber==lastRandomNumber){
+    {
+      randomNumber = random(2, 7);
+    }
+    }
+    
+    for (int i = 2; i < 7; i++)
+    {
+        if (i == randomNumber)
+        {
+            digitalWrite(i, HIGH);
+        }
+
+        else
+        {
+            digitalWrite(i, LOW);
+        }
+    }
+    return randomNumber;
+}
+
+
+
+//To get new random number to the array using pointers
+void newRandomNumber(int *btnHistory, int *counter){
+ randomSeed(analogRead(5));
+  if(*counter < 100){ //gives total of 100 numbers to array
+    btnHistory[*counter] = random(2,7);
+    *counter = *counter + 1;
+  }
+}
+
+//Program for the memorygame
+int muistipeli()
+{
+int gameOver=0;
+int btnHistory[100]; //Array for the buttons to remember
+int counter=0;
+int guessWrong = 0;
+int guess[100]; //Saves the guess of the player
+
+//When you have not lost, do this  
+while(gameOver==0){ 
+  newRandomNumber(btnHistory, &counter);
+  lcd.setCursor(0, 0); 
+  lcd.print("Nykyinen yritys"); //Pretty much same things as in nopeuspeli
+  lcd.setCursor(0, 1);
+  lcd.print(score1);
+  
+  for(int i=0; i<counter; i++){
+    digitalWrite(btnHistory[i], HIGH); //Lights up led according to button history
+    delay(800); //Just a teeny tiny bit of delay :p
+    digitalWrite(btnHistory[i],LOW); //Turns off led according to button history
+    delay(400); //Even less delay :D
+  }
+  //Same thing as in previous ^ but for the user input
+  for(int i=0; i<counter; i++){
+    zBtnSt();
+    if(gameOver==1){
+      break; //breaks the loop if gameOver=1
+    }
+    while(true){
+      rBtnSt(); //Read buttons
+      if(checkButtons()>0){
+        if(checkButtons()+1 == btnHistory[i]){  //Check if the shown buttons and user input is same
+          
+          score1++;        //Add 1 to the score! Yay!
+          gameOver=0; //Keeps the game going
+          delay(300);
+        }else{
+          gameOver=1; //If wrong input, game over
+          for(int i = 2; i < 7; i++){
+            digitalWrite(i, HIGH); //Little led flash to let user know game is over
+          }
+
+          delay(2000);
+
+          for(int i = 2; i < 7; i++){
+            digitalWrite(i, LOW); 
+          }
+        }
+        zBtnSt(); //Zero buttons
+        break; //Breaks the loop
+      }
+    }
+  
+  }
+}
+    
+    
+    
+    
+if(score1>hiScore1){
+  hiScore1=score1;
+    }    //If memorygame score is better than highscore make highscore to score
+lastGame=2;
+return score1; //Returns the score.
+}
+
+//Saver function, shows score and a little led show
+void saver()
+{
+   // Print a message to the LCD.
+   if(screen==0 && lastGame==0){ 
+      lcd.setCursor(0, 0); //Tell lcd where to write
+      lcd.print("Nykyinen yritys"); //Tell what to write
+      lcd.setCursor(0, 1);
+      lcd.print("Ei yritysta");
+      delay(2000);
+      lcd.clear(); //Clears the lcd, so it won't bug
+      screen=1;
+   }
+  
+   if(screen==0 && lastGame==1){ 
+      lcd.setCursor(0, 0); //Tell lcd where to write
+      lcd.print("Nykyinen yritys"); //Tell what to write
+      lcd.setCursor(0, 1);
+      lcd.print(score);
+      delay(2000);
+      lcd.clear(); //Clears the lcd, so it won't bug
+      screen=1;
+   }
+  
+   if(screen==0 && lastGame==2){ 
+      lcd.setCursor(0, 0); //Tell lcd where to write
+      lcd.print("Nykyinen yritys"); //Tell what to write
+      lcd.setCursor(0, 1);
+      lcd.print(score1);
+      delay(2000);
+      lcd.clear(); //Clears the lcd, so it won't bug
+      screen=1;
+   }
+
+   if(screen==1){
+      lcd.setCursor(0, 0);
+      lcd.print("Nopeuspeli enkka");
+      lcd.setCursor(0, 1);
+      lcd.print(hiScore); //Same as before
+      delay(2000);
+      lcd.clear();
+      screen=2;
+   }
+
+   if(screen==2){
+      lcd.setCursor(0, 0);
+      lcd.print("Muistipeli enkka");
+      lcd.setCursor(0, 1); //Same as before
+      lcd.print(hiScore1);
+      delay(2000);
+      lcd.clear();
+      screen=0;
+   }
+
+    // turn on each led
+    for (int pin = 2; pin <= 6; pin++)
+    {
+        digitalWrite(pin, HIGH);
+        delay(100);
+    }
+
+    // turn off each led
+    for (int pin = 2; pin <= 6; pin++)
+    {
+        digitalWrite(pin, LOW);
+        delay(100);
+    }
+}
+
+
+//Read buttonstates
+void rBtnSt()
+{
+int tmpState = 0;
+int check = 0;
+
+    // checking if there is already a button in the buffer
+    for (int i = 0; i < 5; i++)
+    {
+        if (btnState[i] == 1)
+        {
+            check = 1;
+        }
+    }
+
+    // if there is none in the buffer, check the inputs
+    if (check == 0)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            tmpState = analogRead(i);
+            if (tmpState > 900)
+            {
+                btnState[i] = 1;
+            }
+        }
+    }
+}
+//Zero button states function
+void zBtnSt()
+{
+    for (int i = 0; i < 5; i++)
+    {
+        btnState[i] = 0;
+    }
+}
+
+// returns the buttons number 1 to 5
+int checkButtons()
+{
+    int foundButton = 0;
+
+    for (int i = 0; i < 5; i++)
+    {
+        if (btnState[i] == 1)
+        {
+            foundButton = i + 1; // add one to give the true number of btn Korjauskohta
+            break;
+        }
+    }
+
+    return foundButton;
+}
