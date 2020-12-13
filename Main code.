@@ -380,7 +380,7 @@ int checkButtons()
     {
         if (btnState[i] == 1)
         {
-            foundButton = i + 1; // add one to give the true number of btn Korjauskohta
+            foundButton = i + 1; // add one to give the true number of btn
             break;
         }
     }
